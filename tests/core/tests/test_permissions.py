@@ -18,7 +18,7 @@ class ImportExportPermissionTest(TestCase):
         self.client.login(username='admin', password='password')
 
     def set_user_book_model_permission(self, action):
-        permission = Permission.objects.get(codename="%s_book" % action)
+        permission = Permission.objects.get(codename=f"{action}_book")
         self.user.user_permissions.add(permission)
 
     @override_settings(IMPORT_EXPORT_IMPORT_PERMISSION_CODE='change')

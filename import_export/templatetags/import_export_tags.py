@@ -9,5 +9,4 @@ def compare_values(value1, value2):
     dmp = diff_match_patch()
     diff = dmp.diff_main(value1, value2)
     dmp.diff_cleanupSemantic(diff)
-    html = dmp.diff_prettyHtml(diff)
-    return html
+    return dmp.diff_prettyHtml(diff)

@@ -45,11 +45,9 @@ class Field:
         """
         Displays the module, class and name of the field.
         """
-        path = '%s.%s' % (self.__class__.__module__, self.__class__.__name__)
+        path = f'{self.__class__.__module__}.{self.__class__.__name__}'
         column_name = getattr(self, 'column_name', None)
-        if column_name is not None:
-            return '<%s: %s>' % (path, column_name)
-        return '<%s>' % path
+        return f'<{path}: {column_name}>' if column_name is not None else f'<{path}>'
 
     def clean(self, data, **kwargs):
         """
@@ -66,10 +64,7 @@ class Field:
         value = self.widget.clean(value, row=data, **kwargs)
 
         if value in self.empty_values and self.default != NOT_PROVIDED:
-            if callable(self.default):
-                return self.default()
-            return self.default
-
+            return self.default() if callable(self.default) else self.default
         return value
 
     def get_value(self, obj):
@@ -120,6 +115,4 @@ class Field:
         representation.
         """
         value = self.get_value(obj)
-        if value is None:
-            return ""
-        return self.widget.render(value, obj)
+        return "" if value is None else self.widget.render(value, obj)

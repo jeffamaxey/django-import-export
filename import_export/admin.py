@@ -74,7 +74,7 @@ class ImportMixin(BaseImportMixin, ImportExportMixinBase):
 
         opts = self.opts
         codename = get_permission_codename(IMPORT_PERMISSION_CODE, opts)
-        return request.user.has_perm("%s.%s" % (opts.app_label, codename))
+        return request.user.has_perm(f"{opts.app_label}.{codename}")
 
     def get_urls(self):
         urls = super().get_urls()
@@ -148,14 +148,19 @@ class ImportMixin(BaseImportMixin, ImportExportMixinBase):
             }
             content_type_id = ContentType.objects.get_for_model(self.model).pk
             for row in result:
-                if row.import_type != row.IMPORT_TYPE_ERROR and row.import_type != row.IMPORT_TYPE_SKIP:
+                if row.import_type not in [
+                    row.IMPORT_TYPE_ERROR,
+                    row.IMPORT_TYPE_SKIP,
+                ]:
                     LogEntry.objects.log_action(
                         user_id=request.user.pk,
                         content_type_id=content_type_id,
                         object_id=row.object_id,
                         object_repr=row.object_repr,
                         action_flag=logentry_map[row.import_type],
-                        change_message=_("%s through import_export" % row.import_type),
+                        change_message=_(
+                            f"{row.import_type} through import_export"
+                        ),
                     )
 
     def add_success_message(self, result, request):
@@ -207,8 +212,7 @@ class ImportMixin(BaseImportMixin, ImportExportMixinBase):
         """
         Prepare kwargs for import_data.
         """
-        form = kwargs.get('form')
-        if form:
+        if form := kwargs.get('form'):
             kwargs.pop('form')
             return kwargs
         return {}
@@ -259,9 +263,13 @@ class ImportMixin(BaseImportMixin, ImportExportMixinBase):
                     data = force_str(data, self.from_encoding)
                 dataset = input_format.create_dataset(data)
             except UnicodeDecodeError as e:
-                return HttpResponse(_(u"<h1>Imported file has a wrong encoding: %s</h1>" % e))
+                return HttpResponse(_(f"<h1>Imported file has a wrong encoding: {e}</h1>"))
             except Exception as e:
-                return HttpResponse(_(u"<h1>%s encountered while trying to read file: %s</h1>" % (type(e).__name__, import_file.name)))
+                return HttpResponse(
+                    _(
+                        f"<h1>{type(e).__name__} encountered while trying to read file: {import_file.name}</h1>"
+                    )
+                )
 
             # prepare kwargs for import data, if needed
             res_kwargs = self.get_import_resource_kwargs(request, form=form, *args, **kwargs)
@@ -341,7 +349,7 @@ class ExportMixin(BaseExportMixin, ImportExportMixinBase):
 
         opts = self.opts
         codename = get_permission_codename(EXPORT_PERMISSION_CODE, opts)
-        return request.user.has_perm("%s.%s" % (opts.app_label, codename))
+        return request.user.has_perm(f"{opts.app_label}.{codename}")
 
     def get_export_queryset(self, request):
         """
@@ -415,9 +423,9 @@ class ExportMixin(BaseExportMixin, ImportExportMixinBase):
             export_data = self.get_export_data(file_format, queryset, request=request, encoding=self.to_encoding)
             content_type = file_format.get_content_type()
             response = HttpResponse(export_data, content_type=content_type)
-            response['Content-Disposition'] = 'attachment; filename="%s"' % (
-                self.get_export_filename(request, queryset, file_format),
-            )
+            response[
+                'Content-Disposition'
+            ] = f'attachment; filename="{self.get_export_filename(request, queryset, file_format)}"'
 
             post_export.send(sender=None, model=self.model)
             return response
@@ -471,12 +479,9 @@ class ExportActionMixin(ExportMixin):
         formats.
         """
         choices = []
-        formats = self.get_export_formats()
-        if formats:
+        if formats := self.get_export_formats():
             choices.append(('', '---'))
-            for i, f in enumerate(formats):
-                choices.append((str(i), f().get_title()))
-
+            choices.extend((str(i), f().get_title()) for i, f in enumerate(formats))
         self.action_form = export_action_form_factory(choices)
         super().__init__(*args, **kwargs)
 
@@ -484,21 +489,19 @@ class ExportActionMixin(ExportMixin):
         """
         Exports the selected rows using file_format.
         """
-        export_format = request.POST.get('file_format')
-
-        if not export_format:
-            messages.warning(request, _('You must select an export format.'))
-        else:
+        if export_format := request.POST.get('file_format'):
             formats = self.get_export_formats()
             file_format = formats[int(export_format)]()
 
             export_data = self.get_export_data(file_format, queryset, request=request, encoding=self.to_encoding)
             content_type = file_format.get_content_type()
             response = HttpResponse(export_data, content_type=content_type)
-            response['Content-Disposition'] = 'attachment; filename="%s"' % (
-                self.get_export_filename(request, queryset, file_format),
-            )
+            response[
+                'Content-Disposition'
+            ] = f'attachment; filename="{self.get_export_filename(request, queryset, file_format)}"'
             return response
+        else:
+            messages.warning(request, _('You must select an export format.'))
 
     def get_actions(self, request):
         """

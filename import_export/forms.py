@@ -16,9 +16,7 @@ class ImportForm(forms.Form):
 
     def __init__(self, import_formats, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        choices = []
-        for i, f in enumerate(import_formats):
-            choices.append((str(i), f().get_title(),))
+        choices = [(str(i), f().get_title(),) for i, f in enumerate(import_formats)]
         if len(import_formats) > 1:
             choices.insert(0, ('', '---'))
 
@@ -32,8 +30,7 @@ class ConfirmImportForm(forms.Form):
 
     def clean_import_file_name(self):
         data = self.cleaned_data['import_file_name']
-        data = os.path.basename(data)
-        return data
+        return os.path.basename(data)
 
 
 class ExportForm(forms.Form):
@@ -44,9 +41,7 @@ class ExportForm(forms.Form):
 
     def __init__(self, formats, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        choices = []
-        for i, f in enumerate(formats):
-            choices.append((str(i), f().get_title(),))
+        choices = [(str(i), f().get_title(),) for i, f in enumerate(formats)]
         if len(formats) > 1:
             choices.insert(0, ('', '---'))
 
@@ -64,6 +59,6 @@ def export_action_form_factory(formats):
         """
         file_format = forms.ChoiceField(
             label=_('Format'), choices=formats, required=False)
-    _ExportActionForm.__name__ = str('ExportActionForm')
+    _ExportActionForm.__name__ = 'ExportActionForm'
 
     return _ExportActionForm

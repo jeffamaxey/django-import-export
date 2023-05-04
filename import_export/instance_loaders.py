@@ -27,10 +27,7 @@ class ModelInstanceLoader(BaseInstanceLoader):
             for key in self.resource.get_import_id_fields():
                 field = self.resource.fields[key]
                 params[field.attribute] = field.clean(row)
-            if params:
-                return self.get_queryset().get(**params)
-            else:
-                return None
+            return self.get_queryset().get(**params) if params else None
         except self.resource._meta.model.DoesNotExist:
             return None
 
@@ -55,9 +52,7 @@ class CachedInstanceLoader(ModelInstanceLoader):
         self.all_instances = {}
         if self.dataset.dict and self.pk_field.column_name in self.dataset.dict[0]:
             ids = [self.pk_field.clean(row) for row in self.dataset.dict]
-            qs = self.get_queryset().filter(**{
-                "%s__in" % self.pk_field.attribute: ids
-                })
+            qs = self.get_queryset().filter(**{f"{self.pk_field.attribute}__in": ids})
 
             self.all_instances = {
                 self.pk_field.get_value(instance): instance

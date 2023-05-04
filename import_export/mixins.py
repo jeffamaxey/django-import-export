@@ -13,9 +13,11 @@ class BaseImportExportMixin:
     resource_class = None
 
     def get_resource_class(self):
-        if not self.resource_class:
-            return modelresource_factory(self.model)
-        return self.resource_class
+        return (
+            self.resource_class
+            if self.resource_class
+            else modelresource_factory(self.model)
+        )
 
     def get_resource_kwargs(self, request, *args, **kwargs):
         return {}
@@ -63,10 +65,7 @@ class BaseExportMixin(BaseImportExportMixin):
 
     def get_export_filename(self, file_format):
         date_str = now().strftime('%Y-%m-%d')
-        filename = "%s-%s.%s" % (self.model.__name__,
-                                 date_str,
-                                 file_format.get_extension())
-        return filename
+        return f"{self.model.__name__}-{date_str}.{file_format.get_extension()}"
 
 
 class ExportViewMixin(BaseExportMixin):
@@ -81,8 +80,7 @@ class ExportViewMixin(BaseExportMixin):
         return export_data
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        return context
+        return super().get_context_data(**kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -107,9 +105,9 @@ class ExportViewFormMixin(ExportViewMixin, FormView):
             response = HttpResponse(export_data, content_type=content_type)
         except TypeError:
             response = HttpResponse(export_data, mimetype=content_type)
-        response['Content-Disposition'] = 'attachment; filename="%s"' % (
-            self.get_export_filename(file_format),
-        )
+        response[
+            'Content-Disposition'
+        ] = f'attachment; filename="{self.get_export_filename(file_format)}"'
 
         post_export.send(sender=None, model=self.model)
         return response

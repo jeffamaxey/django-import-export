@@ -71,10 +71,7 @@ class InvalidRow:
     @property
     def error_count(self):
         """Returns the total number of validation errors for this row."""
-        count = 0
-        for error_list in self.error_dict.values():
-            count += len(error_list)
-        return count
+        return sum(len(error_list) for error_list in self.error_dict.values())
 
 
 class Result:

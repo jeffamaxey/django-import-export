@@ -11,13 +11,10 @@ from django.utils.encoding import force_str, smart_str
 
 
 def format_datetime(value, datetime_format):
-    # conditional logic to handle correct formatting of dates
-    # see https://code.djangoproject.com/ticket/32738
-    if django.VERSION[0] >= 4:
-        format = django.utils.formats.sanitize_strftime_format(datetime_format)
-        return value.strftime(format)
-    else:
+    if django.VERSION[0] < 4:
         return django.utils.datetime_safe.new_datetime(value).strftime(datetime_format)
+    format = django.utils.formats.sanitize_strftime_format(datetime_format)
+    return value.strftime(format)
 
 
 class Widget:
@@ -72,9 +69,7 @@ class FloatWidget(NumberWidget):
     """
 
     def clean(self, value, row=None, *args, **kwargs):
-        if self.is_empty(value):
-            return None
-        return float(value)
+        return None if self.is_empty(value) else float(value)
 
 
 class IntegerWidget(NumberWidget):
@@ -83,9 +78,7 @@ class IntegerWidget(NumberWidget):
     """
 
     def clean(self, value, row=None, *args, **kwargs):
-        if self.is_empty(value):
-            return None
-        return int(Decimal(value))
+        return None if self.is_empty(value) else int(Decimal(value))
 
 
 class DecimalWidget(NumberWidget):
@@ -94,9 +87,7 @@ class DecimalWidget(NumberWidget):
     """
 
     def clean(self, value, row=None, *args, **kwargs):
-        if self.is_empty(value):
-            return None
-        return Decimal(force_str(value))
+        return None if self.is_empty(value) else Decimal(force_str(value))
 
 
 class CharWidget(Widget):
@@ -153,9 +144,7 @@ class BooleanWidget(Widget):
         return self.TRUE_VALUES[0] if value else self.FALSE_VALUES[0]
 
     def clean(self, value, row=None, *args, **kwargs):
-        if value in self.NULL_VALUES:
-            return None
-        return True if value in self.TRUE_VALUES else False
+        return None if value in self.NULL_VALUES else value in self.TRUE_VALUES
 
 
 class DateWidget(Widget):
@@ -167,10 +156,11 @@ class DateWidget(Widget):
 
     def __init__(self, format=None):
         if format is None:
-            if not settings.DATE_INPUT_FORMATS:
-                formats = ("%Y-%m-%d",)
-            else:
-                formats = settings.DATE_INPUT_FORMATS
+            formats = (
+                settings.DATE_INPUT_FORMATS
+                if settings.DATE_INPUT_FORMATS
+                else ("%Y-%m-%d",)
+            )
         else:
             formats = (format,)
         self.formats = formats
@@ -188,9 +178,7 @@ class DateWidget(Widget):
         raise ValueError("Enter a valid date.")
 
     def render(self, value, obj=None):
-        if not value:
-            return ""
-        return format_datetime(value, self.formats[0])
+        return format_datetime(value, self.formats[0]) if value else ""
 
 
 class DateTimeWidget(Widget):
@@ -203,10 +191,11 @@ class DateTimeWidget(Widget):
 
     def __init__(self, format=None):
         if format is None:
-            if not settings.DATETIME_INPUT_FORMATS:
-                formats = ("%Y-%m-%d %H:%M:%S",)
-            else:
-                formats = settings.DATETIME_INPUT_FORMATS
+            formats = (
+                settings.DATETIME_INPUT_FORMATS
+                if settings.DATETIME_INPUT_FORMATS
+                else ("%Y-%m-%d %H:%M:%S",)
+            )
         else:
             formats = (format,)
         self.formats = formats
@@ -246,10 +235,11 @@ class TimeWidget(Widget):
 
     def __init__(self, format=None):
         if format is None:
-            if not settings.TIME_INPUT_FORMATS:
-                formats = ("%H:%M:%S",)
-            else:
-                formats = settings.TIME_INPUT_FORMATS
+            formats = (
+                settings.TIME_INPUT_FORMATS
+                if settings.TIME_INPUT_FORMATS
+                else ("%H:%M:%S",)
+            )
         else:
             formats = (format,)
         self.formats = formats
@@ -267,9 +257,7 @@ class TimeWidget(Widget):
         raise ValueError("Enter a valid time.")
 
     def render(self, value, obj=None):
-        if not value:
-            return ""
-        return value.strftime(self.formats[0])
+        return value.strftime(self.formats[0]) if value else ""
 
 
 class DurationWidget(Widget):
@@ -287,9 +275,7 @@ class DurationWidget(Widget):
             raise ValueError("Enter a valid duration.")
 
     def render(self, value, obj=None):
-        if value is None:
-            return ""
-        return str(value)
+        return "" if value is None else str(value)
 
 
 class SimpleArrayWidget(Widget):
@@ -322,8 +308,7 @@ class JSONWidget(Widget):
     """
 
     def clean(self, value, row=None, *args, **kwargs):
-        val = super().clean(value)
-        if val:
+        if val := super().clean(value):
             try:
                 return json.loads(val)
             except json.decoder.JSONDecodeError:
@@ -401,8 +386,7 @@ class ForeignKeyWidget(Widget):
         return self.model.objects.all()
 
     def clean(self, value, row=None, *args, **kwargs):
-        val = super().clean(value)
-        if val:
+        if val := super().clean(value):
             return self.get_queryset(value, row, *args, **kwargs).get(**{self.field: val})
         else:
             return None
@@ -453,9 +437,7 @@ class ManyToManyWidget(Widget):
         else:
             ids = value.split(self.separator)
             ids = filter(None, [i.strip() for i in ids])
-        return self.model.objects.filter(**{
-            '%s__in' % self.field: ids
-        })
+        return self.model.objects.filter(**{f'{self.field}__in': ids})
 
     def render(self, value, obj=None):
         ids = [smart_str(getattr(obj, self.field)) for obj in value.all()]

@@ -159,7 +159,7 @@ def do_delete():
 
 
 def run(*args):
-    if len(args) > 0:
+    if args:
         arg = args[0].lower()
         if arg == "create":
             do_create()

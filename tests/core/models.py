@@ -14,10 +14,7 @@ class Author(models.Model):
 
     def full_clean(self, exclude=None, validate_unique=True):
         super().full_clean(exclude, validate_unique)
-        if exclude is None:
-            exclude = []
-        else:
-            exclude = list(exclude)
+        exclude = [] if exclude is None else list(exclude)
         if 'name' not in exclude and self.name == '123':
             raise ValidationError({'name': "'123' is not a valid value"})
 
@@ -60,7 +57,7 @@ class Child(models.Model):
     name = models.CharField(max_length=100)
 
     def __str__(self):
-        return '%s - child of %s' % (self.name, self.parent.name)
+        return f'{self.name} - child of {self.parent.name}'
 
 
 class Profile(models.Model):

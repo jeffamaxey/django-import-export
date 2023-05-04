@@ -263,33 +263,33 @@ class Resource(metaclass=DeclarativeMetaclass):
         self.fields = deepcopy(self.fields)
 
         # lists to hold model instances in memory when bulk operations are enabled
-        self.create_instances = list()
-        self.update_instances = list()
-        self.delete_instances = list()
+        self.create_instances = []
+        self.update_instances = []
+        self.delete_instances = []
 
     @classmethod
-    def get_result_class(self):
+    def get_result_class(cls):
         """
         Returns the class used to store the result of an import.
         """
         return Result
 
     @classmethod
-    def get_row_result_class(self):
+    def get_row_result_class(cls):
         """
         Returns the class used to store the result of a row import.
         """
         return RowResult
 
     @classmethod
-    def get_error_result_class(self):
+    def get_error_result_class(cls):
         """
         Returns the class used to store an error resulting from an import.
         """
         return Error
 
     @classmethod
-    def get_diff_class(self):
+    def get_diff_class(cls):
         """
         Returns the class used to display the diff for an imported instance.
         """
@@ -327,8 +327,9 @@ class Resource(metaclass=DeclarativeMetaclass):
         for field_name, f in self.fields.items():
             if f == field:
                 return field_name
-        raise AttributeError("Field %s does not exists in %s resource" % (
-            field, self.__class__))
+        raise AttributeError(
+            f"Field {field} does not exists in {self.__class__} resource"
+        )
 
     def init_instance(self, row=None):
         """
@@ -356,8 +357,7 @@ class Resource(metaclass=DeclarativeMetaclass):
         Either fetches an already existing instance or initializes a new one.
         """
         if not self._meta.force_init_instance:
-            instance = self.get_instance(instance_loader, row)
-            if instance:
+            if instance := self.get_instance(instance_loader, row):
                 return (instance, False)
         return (self.init_instance(row), True)
 
@@ -378,11 +378,10 @@ class Resource(metaclass=DeclarativeMetaclass):
         Creates objects by calling ``bulk_create``.
         """
         try:
-            if len(self.create_instances) > 0:
-                if not using_transactions and dry_run:
-                    pass
-                else:
-                    self._meta.model.objects.bulk_create(self.create_instances, batch_size=batch_size)
+            if len(self.create_instances) > 0 and (
+                using_transactions or not dry_run
+            ):
+                self._meta.model.objects.bulk_create(self.create_instances, batch_size=batch_size)
         except Exception as e:
             logger.exception(e)
             if raise_errors:
@@ -395,12 +394,11 @@ class Resource(metaclass=DeclarativeMetaclass):
         Updates objects by calling ``bulk_update``.
         """
         try:
-            if len(self.update_instances) > 0:
-                if not using_transactions and dry_run:
-                    pass
-                else:
-                    self._meta.model.objects.bulk_update(self.update_instances, self.get_bulk_update_fields(),
-                                                         batch_size=batch_size)
+            if len(self.update_instances) > 0 and (
+                using_transactions or not dry_run
+            ):
+                self._meta.model.objects.bulk_update(self.update_instances, self.get_bulk_update_fields(),
+                                                     batch_size=batch_size)
         except Exception as e:
             logger.exception(e)
             if raise_errors:
@@ -414,12 +412,11 @@ class Resource(metaclass=DeclarativeMetaclass):
         then calling ``delete()`` on the entire queryset.
         """
         try:
-            if len(self.delete_instances) > 0:
-                if not using_transactions and dry_run:
-                    pass
-                else:
-                    delete_ids = [o.pk for o in self.delete_instances]
-                    self._meta.model.objects.filter(pk__in=delete_ids).delete()
+            if len(self.delete_instances) > 0 and (
+                using_transactions or not dry_run
+            ):
+                delete_ids = [o.pk for o in self.delete_instances]
+                self._meta.model.objects.filter(pk__in=delete_ids).delete()
         except Exception as e:
             logger.exception(e)
             if raise_errors:
@@ -467,12 +464,8 @@ class Resource(metaclass=DeclarativeMetaclass):
                 self.update_instances.append(instance)
             else:
                 self.create_instances.append(instance)
-        else:
-            if not using_transactions and dry_run:
-                # we don't have transactions and we want to do a dry_run
-                pass
-            else:
-                instance.save()
+        elif using_transactions or not dry_run:
+            instance.save()
         self.after_save_instance(instance, using_transactions, dry_run)
 
     def before_save_instance(self, instance, using_transactions, dry_run):
@@ -495,12 +488,8 @@ class Resource(metaclass=DeclarativeMetaclass):
         self.before_delete_instance(instance, dry_run)
         if self._meta.use_bulk:
             self.delete_instances.append(instance)
-        else:
-            if not using_transactions and dry_run:
-                # we don't have transactions and we want to do a dry_run
-                pass
-            else:
-                instance.delete()
+        elif using_transactions or not dry_run:
+            instance.delete()
         self.after_delete_instance(instance, dry_run)
 
     def before_delete_instance(self, instance, dry_run):
@@ -552,11 +541,7 @@ class Resource(metaclass=DeclarativeMetaclass):
         Model instance need to have a primary key value before
         a many-to-many relationship can be used.
         """
-        if (not using_transactions and dry_run) or self._meta.use_bulk:
-            # we don't have transactions and we want to do a dry_run
-            # OR use_bulk is enabled (m2m operations are not supported for bulk operations)
-            pass
-        else:
+        if (using_transactions or not dry_run) and not self._meta.use_bulk:
             for field in self.get_import_fields():
                 if not isinstance(field.widget, widgets.ManyToManyWidget):
                     continue
@@ -677,14 +662,12 @@ class Resource(metaclass=DeclarativeMetaclass):
             if self.for_delete(row, instance):
                 if new:
                     row_result.import_type = RowResult.IMPORT_TYPE_SKIP
-                    if not skip_diff:
-                        diff.compare_with(self, None, dry_run)
                 else:
                     row_result.import_type = RowResult.IMPORT_TYPE_DELETE
                     row_result.add_instance_info(instance)
                     self.delete_instance(instance, using_transactions, dry_run)
-                    if not skip_diff:
-                        diff.compare_with(self, None, dry_run)
+                if not skip_diff:
+                    diff.compare_with(self, None, dry_run)
             else:
                 import_validation_errors = {}
                 try:
@@ -882,10 +865,8 @@ class Resource(metaclass=DeclarativeMetaclass):
 
     def export_field(self, field, obj):
         field_name = self.get_field_name(field)
-        method = getattr(self, 'dehydrate_%s' % field_name, None)
-        if method is not None:
-            return method(obj)
-        return field.export(obj)
+        method = getattr(self, f'dehydrate_{field_name}', None)
+        return method(obj) if method is not None else field.export(obj)
 
     def get_export_fields(self):
         return self.get_fields()
@@ -894,14 +875,13 @@ class Resource(metaclass=DeclarativeMetaclass):
         return [self.export_field(field, obj) for field in self.get_export_fields()]
 
     def get_export_headers(self):
-        headers = [
-            force_str(field.column_name) for field in self.get_export_fields()]
-        return headers
+        return [force_str(field.column_name) for field in self.get_export_fields()]
 
     def get_user_visible_headers(self):
-        headers = [
-            force_str(field.column_name) for field in self.get_user_visible_fields()]
-        return headers
+        return [
+            force_str(field.column_name)
+            for field in self.get_user_visible_fields()
+        ]
 
     def get_user_visible_fields(self):
         return self.get_fields()
@@ -959,7 +939,7 @@ class ModelDeclarativeMetaclass(DeclarativeMetaclass):
 
             field_list = []
             for f in sorted(model_opts.fields + model_opts.many_to_many):
-                if opts.fields is not None and not f.name in opts.fields:
+                if opts.fields is not None and f.name not in opts.fields:
                     continue
                 if opts.exclude and f.name in opts.exclude:
                     continue
@@ -984,28 +964,26 @@ class ModelDeclarativeMetaclass(DeclarativeMetaclass):
                     model = opts.model
                     attrs = field_name.split('__')
                     for i, attr in enumerate(attrs):
-                        verbose_path = ".".join([opts.model.__name__] + attrs[0:i+1])
+                        verbose_path = ".".join([opts.model.__name__] + attrs[:i+1])
 
                         try:
                             f = model._meta.get_field(attr)
                         except FieldDoesNotExist as e:
                             logger.debug(e, exc_info=e)
                             raise FieldDoesNotExist(
-                                "%s: %s has no field named '%s'" %
-                                (verbose_path, model.__name__, attr))
+                                f"{verbose_path}: {model.__name__} has no field named '{attr}'"
+                            )
 
                         if i < len(attrs) - 1:
                             # We're not at the last attribute yet, so check
                             # that we're looking at a relation, and move on to
                             # the next model.
-                            if isinstance(f, ForeignObjectRel):
-                                model = get_related_model(f)
-                            else:
-                                if get_related_model(f) is None:
-                                    raise KeyError(
-                                        '%s is not a relation' % verbose_path)
-                                model = get_related_model(f)
-
+                            if (
+                                not isinstance(f, ForeignObjectRel)
+                                and get_related_model(f) is None
+                            ):
+                                raise KeyError(f'{verbose_path} is not a relation')
+                            model = get_related_model(f)
                     if isinstance(f, ForeignObjectRel):
                         f = f.field
 
@@ -1107,13 +1085,11 @@ class ModelResource(Resource, metaclass=ModelDeclarativeMetaclass):
         return result
 
     @classmethod
-    def widget_kwargs_for_field(self, field_name):
+    def widget_kwargs_for_field(cls, field_name):
         """
         Returns widget kwargs for given field_name.
         """
-        if self._meta.widgets:
-            return self._meta.widgets.get(field_name, {})
-        return {}
+        return cls._meta.widgets.get(field_name, {}) if cls._meta.widgets else {}
 
     @classmethod
     def field_from_django_field(cls, field_name, django_field, readonly):
@@ -1123,14 +1099,13 @@ class ModelResource(Resource, metaclass=ModelDeclarativeMetaclass):
 
         FieldWidget = cls.widget_from_django_field(django_field)
         widget_kwargs = cls.widget_kwargs_for_field(field_name)
-        field = cls.DEFAULT_RESOURCE_FIELD(
+        return cls.DEFAULT_RESOURCE_FIELD(
             attribute=field_name,
             column_name=field_name,
             widget=FieldWidget(**widget_kwargs),
             readonly=readonly,
             default=django_field.default,
         )
-        return field
 
     def get_queryset(self):
         """
@@ -1153,8 +1128,9 @@ class ModelResource(Resource, metaclass=ModelDeclarativeMetaclass):
         if not dry_run and any(r.import_type == RowResult.IMPORT_TYPE_NEW for r in result.rows):
             db_connection = self.get_db_connection_name()
             connection = connections[db_connection]
-            sequence_sql = connection.ops.sequence_reset_sql(no_style(), [self._meta.model])
-            if sequence_sql:
+            if sequence_sql := connection.ops.sequence_reset_sql(
+                no_style(), [self._meta.model]
+            ):
                 cursor = connection.cursor()
                 try:
                     for line in sequence_sql:
@@ -1168,9 +1144,9 @@ def modelresource_factory(model, resource_class=ModelResource):
     Factory for creating ``ModelResource`` class for given Django model.
     """
     attrs = {'model': model}
-    Meta = type(str('Meta'), (object,), attrs)
+    Meta = type('Meta', (object,), attrs)
 
-    class_name = model.__name__ + str('Resource')
+    class_name = f'{model.__name__}Resource'
 
     class_attrs = {
         'Meta': Meta,

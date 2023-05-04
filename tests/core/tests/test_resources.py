@@ -645,25 +645,22 @@ class ModelResourceTest(TestCase):
         self.assertFalse(Book.objects.filter(pk=self.book.pk))
 
     def test_save_instance_with_dry_run_flag(self):
+
+
+
         class B(BookResource):
             def before_save_instance(self, instance, using_transactions, dry_run):
                 super().before_save_instance(instance, using_transactions, dry_run)
-                if dry_run:
-                    self.before_save_instance_dry_run = True
-                else:
-                    self.before_save_instance_dry_run = False
+                self.before_save_instance_dry_run = bool(dry_run)
+
             def save_instance(self, instance, using_transactions=True, dry_run=False):
                 super().save_instance(instance, using_transactions, dry_run)
-                if dry_run:
-                    self.save_instance_dry_run = True
-                else:
-                    self.save_instance_dry_run = False
+                self.save_instance_dry_run = bool(dry_run)
+
             def after_save_instance(self, instance, using_transactions, dry_run):
                 super().after_save_instance(instance, using_transactions, dry_run)
-                if dry_run:
-                    self.after_save_instance_dry_run = True
-                else:
-                    self.after_save_instance_dry_run = False
+                self.after_save_instance_dry_run = bool(dry_run)
+
 
         resource = B()
         resource.import_data(self.dataset, dry_run=True, raise_errors=True)
@@ -689,6 +686,9 @@ class ModelResourceTest(TestCase):
         self.assertEqual(0, mock_book.call_count)
 
     def test_delete_instance_with_dry_run_flag(self):
+
+
+
         class B(BookResource):
             delete = fields.Field(widget=widgets.BooleanWidget())
 
@@ -697,24 +697,16 @@ class ModelResourceTest(TestCase):
 
             def before_delete_instance(self, instance, dry_run):
                 super().before_delete_instance(instance, dry_run)
-                if dry_run:
-                    self.before_delete_instance_dry_run = True
-                else:
-                    self.before_delete_instance_dry_run = False
+                self.before_delete_instance_dry_run = bool(dry_run)
 
             def delete_instance(self, instance, using_transactions=True, dry_run=False):
                 super().delete_instance(instance, using_transactions, dry_run)
-                if dry_run:
-                    self.delete_instance_dry_run = True
-                else:
-                    self.delete_instance_dry_run = False
+                self.delete_instance_dry_run = bool(dry_run)
 
             def after_delete_instance(self, instance, dry_run):
                 super().after_delete_instance(instance, dry_run)
-                if dry_run:
-                    self.after_delete_instance_dry_run = True
-                else:
-                    self.after_delete_instance_dry_run = False
+                self.after_delete_instance_dry_run = bool(dry_run)
+
 
         resource = B()
         row = [self.book.pk, self.book.name, '1']
@@ -744,6 +736,9 @@ class ModelResourceTest(TestCase):
 
     def test_dehydrating_fields(self):
 
+
+
+
         class B(resources.ModelResource):
             full_title = fields.Field(column_name="Full title")
 
@@ -752,14 +747,14 @@ class ModelResourceTest(TestCase):
                 fields = ('author__name', 'full_title')
 
             def dehydrate_full_title(self, obj):
-                return '%s by %s' % (obj.name, obj.author.name)
+                return f'{obj.name} by {obj.author.name}'
+
 
         author = Author.objects.create(name="Author")
         self.book.author = author
         resource = B()
         full_title = resource.export_field(resource.get_fields()[0], self.book)
-        self.assertEqual(full_title, '%s by %s' % (self.book.name,
-                                                   self.book.author.name))
+        self.assertEqual(full_title, f'{self.book.name} by {self.book.author.name}')
 
     def test_widget_format_in_fk_field(self):
         class B(resources.ModelResource):
@@ -983,16 +978,20 @@ class ModelResourceTest(TestCase):
                          cm.exception.args[0])
 
     def test_override_field_construction_in_resource(self):
+
+
+
         class B(resources.ModelResource):
+
             class Meta:
                 model = Book
                 fields = ('published',)
 
             @classmethod
-            def field_from_django_field(self, field_name, django_field,
-                                        readonly):
+            def field_from_django_field(cls, field_name, django_field, readonly):
                 if field_name == 'published':
                     return {'sound': 'quack'}
+
 
         B()
         self.assertEqual({'sound': 'quack'}, B.fields['published'])
@@ -1025,6 +1024,9 @@ class ModelResourceTest(TestCase):
 
     def test_follow_relationship_for_modelresource(self):
 
+
+
+
         class EntryResource(resources.ModelResource):
             username = fields.Field(attribute='user__username', readonly=False)
 
@@ -1033,11 +1035,9 @@ class ModelResourceTest(TestCase):
                 fields = ('id', )
 
             def after_save_instance(self, instance, using_transactions, dry_run):
-                if not using_transactions and dry_run:
-                    # we don't have transactions and we want to do a dry_run
-                    pass
-                else:
+                if using_transactions or not dry_run:
                     instance.user.save()
+
 
         user = User.objects.create(username='foo')
         entry = Entry.objects.create(user=user)
